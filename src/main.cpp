@@ -2,6 +2,7 @@
 #include <iostream>
 #include "json.hpp"
 #include "PID.h"
+#include "twiddle.h"
 #include <math.h>
 
 // for convenience
@@ -28,15 +29,32 @@ std::string hasData(std::string s) {
   return "";
 }
 
-int main()
+int main(int argc, char* argv[])
 {
+  bool twiddle = argc > 1;
+  if (twiddle) {
+    std::cout << "MODE: optimizing PID parameters" << std::endl;
+  }
+  else {
+    std::cout << "MODE: testing PID" << std::endl;
+  }
   uWS::Hub h;
 
   PID pid;
-  // TODO: Initialize the pid variable.
-  pid.Init(0.2, 0.004, 3);
+  if (twiddle) {
+    pid.Init(0.1, 0.002, 0.1);
+  }
+  else {
+    pid.Init(0.2, 0.004, 0.3);
+  }
 
-  h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  int step = 0;
+  int step_limit = 200;
+  double error = 0;
+
+  Twiddle tw(pid);
+
+  h.onMessage([&](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -62,15 +80,29 @@ int main()
           steer_value = pid.GetValue();
           steer_value = std::max(steer_value, -1.);
           steer_value = std::min(steer_value, 1.);
+
+          if (twiddle && step < step_limit && error < tw.BestError()) {
+            error = std::max(fabs(cte), error);
+            step++;
+          }
+          else if (twiddle) {
+            std::cout << "PID error: " << error << std::endl;
+            std::cout << "PID params: " << pid.Kp_ << ", " << pid.Ki_ << ", " << pid.Kp_ << std::endl;
+            tw.Update(error);
+            step = 0;
+            error = 0;
+            std::string msg = "42[\"reset\",{}]";
+            ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+          }
           
           // DEBUG
-          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+          //std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = 0.3;
+          msgJson["throttle"] = 0.03 / fabs(steer_value);
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+          //std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
