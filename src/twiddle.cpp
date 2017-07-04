@@ -34,4 +34,5 @@ void Twiddle::UpdateParameter() {
   if (parameter_ == 0) pid_.Kp_ += dp_[0] * c;
   else if (parameter_ == 1) pid_.Ki_ += dp_[1] * c;
   else if (parameter_ == 2) pid_.Kd_ += dp_[2] * c;
+  pid_.Init(pid_.Kp_, pid_.Ki_, pid_.Kd_);
 }

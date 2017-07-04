@@ -1,5 +1,6 @@
 #include <uWS/uWS.h>
 #include <iostream>
+#include <fstream>
 #include "json.hpp"
 #include "PID.h"
 #include "twiddle.h"
@@ -45,11 +46,11 @@ int main(int argc, char* argv[])
     pid.Init(0.1, 0.002, 0.1);
   }
   else {
-    pid.Init(0.2, 0.004, 0.3);
+    pid.Init(0.3, 0, 0.3);
   }
 
   int step = 0;
-  int step_limit = 200;
+  int step_limit = 100;
   double error = 0;
 
   Twiddle tw(pid);
@@ -78,16 +79,21 @@ int main(int argc, char* argv[])
           */
           pid.UpdateError(cte);
           steer_value = pid.GetValue();
-          steer_value = std::max(steer_value, -1.);
-          steer_value = std::min(steer_value, 1.);
+          steer_value = std::max(steer_value, -.5);
+          steer_value = std::min(steer_value, .5);
 
           if (twiddle && step < step_limit && error < tw.BestError()) {
-            error = std::max(fabs(cte), error);
+            error += fabs(cte);
             step++;
           }
           else if (twiddle) {
             std::cout << "PID error: " << error << std::endl;
             std::cout << "PID params: " << pid.Kp_ << ", " << pid.Ki_ << ", " << pid.Kp_ << std::endl;
+            if (error < tw.BestError())
+            {
+              std::fstream fs("best.pid", fs.out | fs.app);
+              fs << error << ", " << pid.Kp_ << ", " << pid.Ki_ << ", " << pid.Kp_ << std::endl;
+            }
             tw.Update(error);
             step = 0;
             error = 0;
@@ -96,11 +102,11 @@ int main(int argc, char* argv[])
           }
           
           // DEBUG
-          //std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = 0.03 / fabs(steer_value);
+          msgJson["throttle"] = 0.1;
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
           //std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);

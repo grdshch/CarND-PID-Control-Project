@@ -6,7 +6,7 @@
 
 class Twiddle {
 public:
-  Twiddle(PID& pid) : pid_(pid), first_run_(true), best_cte_(4), dp_({0.2, 0.2, 0.2}){}
+  Twiddle(PID& pid) : pid_(pid), dp_({0.2, 0.02, 0.2}), best_cte_(500), first_run_(true) {}
   ~Twiddle() {}
   void Update(double cte);
   double BestError() { return best_cte_;}
