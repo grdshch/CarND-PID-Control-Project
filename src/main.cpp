@@ -43,14 +43,16 @@ int main(int argc, char* argv[])
 
   PID pid;
   if (twiddle) {
-    pid.Init(0.1, 0.002, 0.1);
+    // start values to optimize
+    pid.Init(1, 0.1, 1);
   }
   else {
-    pid.Init(0.3, 0, 0.3);
+    // result parameters
+    pid.Init(0.2, 0.001, 0.8);
   }
 
   int step = 0;
-  int step_limit = 100;
+  int step_limit = 200;
   double error = 0;
 
   Twiddle tw(pid);
@@ -71,44 +73,53 @@ int main(int argc, char* argv[])
           double speed = std::stod(j[1]["speed"].get<std::string>());
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
           double steer_value;
-          /*
-          * TODO: Calcuate steering value here, remember the steering value is
-          * [-1, 1].
-          * NOTE: Feel free to play around with the throttle and speed. Maybe use
-          * another PID controller to control the speed!
-          */
+
           pid.UpdateError(cte);
           steer_value = pid.GetValue();
-          steer_value = std::max(steer_value, -.5);
-          steer_value = std::min(steer_value, .5);
 
-          if (twiddle && step < step_limit && error < tw.BestError()) {
-            error += fabs(cte);
-            step++;
-          }
-          else if (twiddle) {
-            std::cout << "PID error: " << error << std::endl;
-            std::cout << "PID params: " << pid.Kp_ << ", " << pid.Ki_ << ", " << pid.Kp_ << std::endl;
-            if (error < tw.BestError())
+          // limit steer_value on higher speed
+          double steer_min = speed < 10 ? -1. : -0.5;
+          double steer_max = speed < 10 ? 1. : 0.5;
+          steer_value = std::max(steer_value, steer_min);
+          steer_value = std::min(steer_value, steer_max);
+
+          // optimizing PID parameters using twiddle
+          if (twiddle)
+          {
+            if (step < step_limit && error < tw.BestError())
             {
-              std::fstream fs("best.pid", fs.out | fs.app);
-              fs << error << ", " << pid.Kp_ << ", " << pid.Ki_ << ", " << pid.Kp_ << std::endl;
+              error += fabs(cte);
+              step++;
             }
-            tw.Update(error);
-            step = 0;
-            error = 0;
-            std::string msg = "42[\"reset\",{}]";
-            ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+            else
+            {
+              if (error < tw.BestError())
+              {
+                std::fstream fs("best.pid", fs.out | fs.app);
+                fs << error << ", " << pid.Kp_ << ", " << pid.Ki_ << ", " << pid.Kp_ << std::endl;
+              }
+              tw.Update(error);
+              step = 0;
+              error = 0;
+              std::string msg = "42[\"reset\",{}]";
+              ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+
+              if (tw.Sum() < 0.01) {
+                ws.close();
+                std::cout << "FINISHED" << std::endl;
+              }
+            }
           }
-          
-          // DEBUG
-          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+          else {
+            std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+          }
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = 0.1;
+          double throttle = .2;
+          msgJson["throttle"] = throttle;
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          //std::cout << msg << std::endl;
+          std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {

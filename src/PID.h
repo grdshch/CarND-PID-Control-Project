@@ -1,6 +1,8 @@
 #ifndef PID_H
 #define PID_H
 
+#include <chrono>
+
 class PID {
 public:
   /*
@@ -19,6 +21,7 @@ public:
   double Ki_;
   double Kd_;
 
+  std::chrono::steady_clock::time_point timestamp_;
   /*
   * Constructor
   */

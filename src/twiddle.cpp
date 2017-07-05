@@ -4,7 +4,6 @@ void Twiddle::Update(double cte) {
   if (first_run_) {
     first_run_ = false;
     best_cte_ = cte;
-
     parameter_ = 0;
     increase_ = true;
     UpdateParameter();
